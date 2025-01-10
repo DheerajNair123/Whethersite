@@ -1,72 +1,157 @@
 const apiKey = 'c5af993ac411be7d36fcc9d90c5f1437';
+const locButton = document.querySelector('.loc-button');
+const locationInput = document.getElementById('locationInput');
+const todayInfo = document.querySelector('.today-info');
+const todayWeatherIcon = document.querySelector('.today-weather i');
+const todayTemp = document.querySelector('.weather-temp');
+const daysList = document.querySelector('.days-list');
 
-// Function to fetch weather data by city name
-const getWeatherData = async (city) => {
-  try {
-    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${apiKey}`;
-    const response = await fetch(apiUrl);
-
-    if (!response.ok) {
-      throw new Error('Weather data not available');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching weather data:', error);
-    return null;
-  }
+// Mapping of weather condition codes to icon class names (Depending on Openweather Api Response)
+const weatherIconMap = {
+    '01d': 'sun',
+    '01n': 'moon',
+    '02d': 'sun',
+    '02n': 'moon',
+    '03d': 'cloud',
+    '03n': 'cloud',
+    '04d': 'cloud',
+    '04n': 'cloud',
+    '09d': 'cloud-rain',
+    '09n': 'cloud-rain',
+    '10d': 'cloud-rain',
+    '10n': 'cloud-rain',
+    '11d': 'cloud-lightning',
+    '11n': 'cloud-lightning',
+    '13d': 'cloud-snow',
+    '13n': 'cloud-snow',
+    '50d': 'water',
+    '50n': 'water'
 };
 
-// Function to display weather data on the web page
-const displayWeatherData = async () => {
-  const cityInput = document.getElementById('cityInput');
-  const weatherDataElement = document.getElementById('weatherData');
+// Function to display the clock
+function updateClock() {
+    const clockElement = document.getElementById('clock');
+    const now = new Date();
+    let hours = now.getHours();
+    const minutes = now.getMinutes();
+    // const seconds = now.getSeconds();
 
-  const city = cityInput.value.trim();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;  // Hour '0' should be '12'
+    const strMinutes = minutes < 10 ? '0' + minutes : minutes;
+    // const strSeconds = seconds < 10 ? '0' + seconds : seconds;
 
-  if (!city) {
-    alert('Please enter a city name');
-    return;
-  }
-
-  const weatherData = await getWeatherData(city);
-
-  if (weatherData) {
-    const { main, weather, name } = weatherData;
-    const temperature = main.temp;
-    const description = weather[0].description;
-
-    weatherDataElement.innerHTML = `Current temperature in ${name}: ${temperature}°C with ${description}`;
-  } else {
-    weatherDataElement.innerHTML = 'Weather data not available';
-  }
-};
-
-// Event listener for the button to fetch weather data
-const submitBtn = document.getElementById('submitBtn');
-submitBtn.addEventListener('click', displayWeatherData);
-
-function updatetime(){
-  const now=new Date();
-
-  let hours=now.getHours();
-  const minutes = String(now.getMinutes()).padStart(2,'0');
-  const seconds= String(now.getSeconds()).padStart(2,'0');
-
-  let ampm= hours>=12 ? 'PM' : 'AM';
-  hours=hours%12;
-  hours= hours ? hours: 12;
-  
-
-  const timeString=`${hours} : ${minutes} : ${seconds} ${ampm}`;
-
-
-  const clockElement= document.getElementById('clock');
-  if(clockElement){
-    clockElement.textContent = timeString;
-  }
-  
+    clockElement.textContent = `${hours}:${strMinutes} ${ampm}`;
 }
-updatetime();
-setInterval(updatetime,1000)
+
+// Update the clock every second
+setInterval(updateClock, 1000);
+
+// Initial call to display the clock immediately
+updateClock();
+
+function fetchWeatherData(location) {
+    // Construct the API url with the location and api key
+    const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${location}&appid=${apiKey}&units=metric`;
+
+    // Fetch weather data from api
+    fetch(apiUrl).then(response => response.json()).then(data => {
+        // Update todays info
+        const todayWeather = data.list[0].weather[0].description;
+        const todayTemperature = `${Math.round(data.list[0].main.temp)}°C`;
+        const todayWeatherIconCode = data.list[0].weather[0].icon;
+
+        todayInfo.querySelector('h2').textContent = new Date().toLocaleDateString('en', { weekday: 'long' });
+        todayInfo.querySelector('span').textContent = new Date().toLocaleDateString('en', { day: 'numeric', month: 'long', year: 'numeric' });
+        todayWeatherIcon.className = `bx bx-${weatherIconMap[todayWeatherIconCode]}`;
+        todayTemp.textContent = todayTemperature;
+
+        // Update location and weather description in the "left-info" section
+        const locationElement = document.querySelector('.today-info > div > span');
+        locationElement.textContent = `${data.city.name}, ${data.city.country}`;
+
+        const weatherDescriptionElement = document.querySelector('.today-weather > h3');
+        weatherDescriptionElement.textContent = todayWeather;
+
+        // Update todays info in the "day-info" section
+        const todayPrecipitation = `${data.list[0].pop}%`;
+        const todayHumidity = `${data.list[0].main.humidity}%`;
+        const todayWindSpeed = `${data.list[0].wind.speed} km/h`;
+
+        const dayInfoContainer = document.querySelector('.day-info');
+        dayInfoContainer.innerHTML = `
+
+            <div>
+                <span class="title">PRECIPITATION</span>
+                <span class="value">${todayPrecipitation}</span>
+            </div>
+            <div>
+                <span class="title">HUMIDITY</span>
+                <span class="value">${todayHumidity}</span>
+            </div>
+            <div>
+                <span class="title">WIND SPEED</span>
+                <span class="value">${todayWindSpeed}</span>
+            </div>
+
+        `;
+
+        // Update next 4 days weather
+        const today = new Date();
+        const nextDaysData = data.list.slice(1);
+
+        const uniqueDays = new Set();
+        let count = 0;
+        daysList.innerHTML = '';
+        for (const dayData of nextDaysData) {
+            const forecastDate = new Date(dayData.dt_txt);
+            const dayAbbreviation = forecastDate.toLocaleDateString('en', { weekday: 'short' });
+            const dayTemp = `${Math.round(dayData.main.temp)}°C`;
+            const iconCode = dayData.weather[0].icon;
+
+            // Ensure the day isn't duplicate and today
+            if (!uniqueDays.has(dayAbbreviation) && forecastDate.getDate() !== today.getDate()) {
+                uniqueDays.add(dayAbbreviation);
+                daysList.innerHTML += `
+                
+                    <li>
+                        <i class='bx bx-${weatherIconMap[iconCode]}'></i>
+                        <span>${dayAbbreviation}</span>
+                        <span class="day-temp">${dayTemp}</span>
+                    </li>
+
+                `;
+                count++;
+            }
+
+            // Stop after getting 4 distinct days
+            if (count === 4) break;
+        }
+    }).catch(error => {
+        alert(`Error fetching weather data: ${error} (Api Error)`);
+    });
+}
+
+// Fetch weather data on document load for default location (Germany)
+document.addEventListener('DOMContentLoaded', () => {
+    const defaultLocation = 'Germany';
+    fetchWeatherData(defaultLocation);
+});
+
+locButton.addEventListener('click', () => {
+    const location = locationInput.value.trim();
+    if (!location) return;
+
+    fetchWeatherData(location);
+});
+
+// Add event listener for 'Enter' key on the input field
+locationInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+        const location = locationInput.value.trim();
+        if (location) {
+            fetchWeatherData(location);
+        }
+    }
+});
